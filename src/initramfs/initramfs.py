@@ -6,10 +6,10 @@ from log import blog
 
 WORK_DIRECTORY = "initramfsbuild"
 
-BASE_FS = [ "dev", "run", "sys", "proc", "usr", "sbin"]
-USR_SUB = [ "bin", "lib" ]
+BASE_FS = [ "dev", "run", "sys", "proc", "usr", "etc" ]
+USR_SUB = [ "bin", "lib", "sbin" ]
 USR_LIB_SUB = [ "firmware", "modules" ]
-ETC_SUB = [ "modprobe.d", "udev/rules.d" ]
+ETC_SUB = [ "modprobe.d", "udev" ]
 
 # udevd -> /usr/lib/systemd-udevd
 BINFILES = ["sh", "cat", "cp", "dd", "killall", "ls", "mkdir", "mknod", "mount", "fgrep", "find", "egrep", "sed", "xargs", "grep", "umount", "sed", "sleep", "ln", "rm", "uname", "readlink", "basename", "udevadm", "kmod"]
@@ -22,9 +22,8 @@ def touch_file(file):
 def copy_with_deps(buildroot, binfile, deps_list):
     blog.info("Copying binary {} with dependencies..".format(binfile))
     
-    path_stripped_lead = binfile[1:len(binfile)]
-
-    shutil.copy(os.path.join(buildroot, path_stripped_lead), os.path.join(WORK_DIRECTORY, path_stripped_lead))
+    binpath = os.path.relpath(binfile, start="buildroot")
+    shutil.copy(os.path.join("buildroot", binpath), os.path.join(WORK_DIRECTORY, binpath))
 
     for dep in deps_list:
         blog.info("Copying library {}..".format(dep))
@@ -101,17 +100,17 @@ def create_initramfs(buildroot, kname, kver, bindir):
     
     # mk null and console
     blog.info("Creating device nodes..")
-    os.command("mknod -m 640 {} c 5 1".format(os.path.join(WORK_DIRECTORY, "dev/console")))
-    os.command("mknod -m 664 {} c 5 1".format(os.path.join(WORK_DIRECTORY, "dev/null")))
+    os.system("mknod -m 640 {} c 5 1".format(os.path.join(WORK_DIRECTORY, "dev/console")))
+    os.system("mknod -m 664 {} c 5 1".format(os.path.join(WORK_DIRECTORY, "dev/null")))
     
     blog.info("Copying udev configuration..")
     try:
         # copy udev.conf from buildroot
         shutil.copy(os.path.join(buildroot, "etc/udev/udev.conf"), os.path.join(WORK_DIRECTORY, "etc/udev/udev.conf"))
         # rules.d
-        shutil.copytree(os.path.join(buildroot, "etc/udev/udev.d"), os.path.join(WORK_DIRECTORY, "etc/udev/udev.d"))
-    except FileNotFoundError:
-        blog.error("Could not find required udev configuration files..")
+        shutil.copytree(os.path.join(buildroot, "etc/udev/rules.d"), os.path.join(WORK_DIRECTORY, "etc/udev/rules.d"))
+    except FileNotFoundError as ex:
+        blog.error("Could not find required udev configuration files: {}".format(ex))
         return -1
 
     # copy firmware, if it exists..
@@ -124,27 +123,29 @@ def create_initramfs(buildroot, kname, kver, bindir):
        return -1
     
     blog.info("Copying init binary..")
-    shutil.copy(os.path.exists(bindir, "init"), os.path.join(WORK_DIRECTORY, "init"))
+    shutil.copy(os.path.join(bindir, "init"), os.path.join(WORK_DIRECTORY, "init"))
     
     blog.info("Copying /usr/bin binaries..")
-    for b in binfiles:
+    for b in BINFILES:
         b_path = os.path.join(buildroot, os.path.join("usr/bin", b))
         copy_with_deps(buildroot, b_path, get_dependencies(b_path))
 
     blog.info("Copying /usr/sbin binaries..")
-    for b in sbinfiles:
+    for b in SBINFILES:
         b_path = os.path.join(buildroot, os.path.join("usr/sbin", b))
         copy_with_deps(buildroot, b_path, get_dependencies(b_path))
 
     blog.info("Copying systemd-udevd..")
-    sd_udevd_path = os.path.join(buildroot, "usr/lib/systemd-udevd")
+    sd_udevd = "usr/lib/systemd/systemd-udevd"
+
+    sd_udevd_path = os.path.join(buildroot, sd_udevd)
     sd_udevd_deps = get_dependencies(sd_udevd_path)
     
     for dep in sd_udevd_deps:
         blog.info("Copying library {}..".format(dep))
         shutil.copy(os.path.join(buildroot, dep[1:len(dep)]), os.path.join(WORK_DIRECTORY, dep[1:len(dep)]))
 
-    shutil.copy(os.path.join(buildroot, "usr/lib/systemd-udevd"), os.path.join(WORK_DIRECTORY, "usr/lib/systemd-udevd"))
+    shutil.copy(sd_udevd, os.path.join(WORK_DIRECTORY, sd_udevd))
     
     blog.info("Symlinking /usr/bin/kmod..")
     os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "lsmod"))
