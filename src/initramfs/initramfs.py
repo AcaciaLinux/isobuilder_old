@@ -96,7 +96,7 @@ def create_initramfs(buildroot, kname, kver, bindir):
     os.symlink("/usr/bin", os.path.join(WORK_DIRECTORY, "bin"))
     os.symlink("/usr/lib", os.path.join(WORK_DIRECTORY, "lib"))
     os.symlink("/usr/sbin", os.path.join(WORK_DIRECTORY, "sbin"))
-    os.symlink("/lib", os.path.join(WORK_DIRECTORY, "lib64"))
+    os.symlink("/usr/lib64", os.path.join(WORK_DIRECTORY, "lib64"))
     
     # mk null and console
     blog.info("Creating device nodes..")
