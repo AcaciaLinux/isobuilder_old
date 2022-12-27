@@ -8,7 +8,7 @@ WORK_DIRECTORY = "initramfsbuild"
 
 BASE_FS = [ "dev", "run", "sys", "proc", "usr", "etc" ]
 USR_SUB = [ "bin", "lib", "sbin", "lib64" ]
-USR_LIB_SUB = [ "firmware", "modules", "systemd" ]
+USR_LIB_SUB = [ "firmware", "modules" ]
 ETC_SUB = [ "modprobe.d", "udev" ]
 
 # udevd -> /usr/lib/systemd-udevd
@@ -154,7 +154,7 @@ def create_initramfs(buildroot, kname, kver, bindir):
     shutil.copytree(os.path.join(buildroot, "usr/lib/systemd"), os.path.join(WORK_DIRECTORY, "usr/lib/systemd"))
     
     blog.info("Copying kernel modules...")
-    shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/".format(kver)), symlinks=False)
+    shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/{}".format(kver)), symlinks=False, ignore_dangling_symlinks=True)
 
     blog.info("Compressing initrd..")
     initrd_file = "acacia-initrd.img"
