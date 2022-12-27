@@ -7,8 +7,8 @@ from log import blog
 WORK_DIRECTORY = "initramfsbuild"
 
 BASE_FS = [ "dev", "run", "sys", "proc", "usr", "etc" ]
-USR_SUB = [ "bin", "lib", "sbin" ]
-USR_LIB_SUB = [ "firmware", "modules" ]
+USR_SUB = [ "bin", "lib", "sbin", "lib64" ]
+USR_LIB_SUB = [ "firmware", "modules", "systemd" ]
 ETC_SUB = [ "modprobe.d", "udev" ]
 
 # udevd -> /usr/lib/systemd-udevd
@@ -81,7 +81,7 @@ def create_initramfs(buildroot, kname, kver, bindir):
     
     lib_path = os.path.join(usr_path, "lib")
     for path in USR_LIB_SUB:
-        target = os.path.join(usr_path, path)
+        target = os.path.join(lib_path, path)
         blog.info("Creating {}".format(target))
         os.mkdir(target)
    
@@ -145,8 +145,6 @@ def create_initramfs(buildroot, kname, kver, bindir):
         blog.info("Copying library {}..".format(dep))
         shutil.copy(os.path.join(buildroot, dep[1:len(dep)]), os.path.join(WORK_DIRECTORY, dep[1:len(dep)]))
 
-    shutil.copy(sd_udevd, os.path.join(WORK_DIRECTORY, sd_udevd))
-    
     blog.info("Symlinking /usr/bin/kmod..")
     os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "lsmod"))
     os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "insmod"))
@@ -154,19 +152,14 @@ def create_initramfs(buildroot, kname, kver, bindir):
     blog.info("Copying udev, systemd and elogin config files")
     shutil.copytree(os.path.join(buildroot, "usr/lib/udev"), os.path.join(WORK_DIRECTORY, "usr/lib/udev"))
     shutil.copytree(os.path.join(buildroot, "usr/lib/systemd"), os.path.join(WORK_DIRECTORY, "usr/lib/systemd"))
-    shutil.copytree(os.path.join(buildroot, "usr/lib/elogin"), os.path.join(WORK_DIRECTORY, "usr/lib/elogin"))
     
     blog.info("Copying kernel modules...")
-    shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/{}".format(kver)))
-
-    blog.info("Running depmod..")
-    os.system("depmod -b {} {}".format(WORK_DIRECTORY, kver))
+    shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/".format(kver)), symlinks=False)
 
     blog.info("Compressing initrd..")
     initrd_file = "acacia-initrd.img"
     os.system("(cd {}; find . | cpio -o -H newc --quiet | gzip -9) > {}".format(WORK_DIRECTORY, initrd_file))
 
-    shutil.copy(os.path.join(WORK_DIRECTORY, initrd_file), initrd_file)
     blog.info("Created initramfs.")
 
 
