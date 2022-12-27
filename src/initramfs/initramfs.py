@@ -1,6 +1,8 @@
 import os
 import shutil
 import subprocess
+import lddwrap
+import pathlib
 
 from log import blog
 
@@ -31,6 +33,10 @@ def copy_with_deps(buildroot, binfile, deps_list):
 
 # uses ldd to get all dependencies of a given dynamic binary
 def get_dependencies(binfile):
+    return lddwrap.list_dependencies(path=pathlib.Path(binfile))
+
+# uses ldd to get all dependencies of a given dynamic binary
+def get_dependencies_fd(binfile):
     if(not os.path.exists(binfile)):
         return [ ]
 
