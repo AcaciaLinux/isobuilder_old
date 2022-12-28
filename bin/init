@@ -3,29 +3,6 @@
 PATH=/usr/bin:/usr/sbin
 export PATH
 
-a_modprobe()
-{
-   printf "Loading modules...\n"
-   # USB hid
-   modprobe usbhid
-  
-   # loop device
-   modprobe loop
-
-   #overlayfs driver
-   modprobe overlay
-
-   # generic ide controller driver (hyperV, qemu)
-   modprobe ata_piix
-
-   # QEMU virtio-pci driver
-   modprobe virtio_pci
-
-   # temporary solution?
-   # just modprobe every module we have..
-   #find /lib/modules/ | fgrep .ko | sed -r "s:^.*/|[.]ko\$::g" | sed 's/.ko.zst//' | xargs -n 1 modprobe
-}
-
 problem()
 {
    printf "Encountered a problem!\n\nDropping you to a shell.\n\n"
@@ -86,8 +63,6 @@ do_try_resume()
        echo -n ${maj%,}:$min > /sys/power/resume )
 }
 
-a_modprobe
-
 init=/sbin/init
 root=
 rootdelay=
@@ -119,25 +94,9 @@ for param in $cmdline ; do
   esac
 done
 
-# udevd location depends on version
-if [ -x /sbin/udevd ]; then
-  UDEVD=/sbin/udevd
-elif [ -x /lib/udev/udevd ]; then
-  UDEVD=/lib/udev/udevd
-elif [ -x /lib/systemd/systemd-udevd ]; then
-  UDEVD=/lib/systemd/systemd-udevd
-else
-  echo "Cannot find udevd nor systemd-udevd"
-  problem
-fi
-
-${UDEVD} --daemon --resolve-names=never
-udevadm trigger
+/usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
+udevadm trigger --verbose
 udevadm settle
-
-if [ -f /etc/mdadm.conf ] ; then mdadm -As                       ; fi
-if [ -x /sbin/vgchange  ] ; then /sbin/vgchange -a y > /dev/null ; fi
-if [ -n "$rootdelay"    ] ; then sleep "$rootdelay"              ; fi
 
 do_try_resume # This function will not return if resuming from disk
 do_mount_root
