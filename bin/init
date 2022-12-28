@@ -1,0 +1,152 @@
+#!/bin/sh
+
+PATH=/usr/bin:/usr/sbin
+export PATH
+
+a_modprobe()
+{
+   printf "Loading modules...\n"
+   # USB hid
+   modprobe usbhid
+  
+   # loop device
+   modprobe loop
+
+   #overlayfs driver
+   modprobe overlay
+
+   # generic ide controller driver (hyperV, qemu)
+   modprobe ata_piix
+
+   # QEMU virtio-pci driver
+   modprobe virtio_pci
+
+   # temporary solution?
+   # just modprobe every module we have..
+   #find /lib/modules/ | fgrep .ko | sed -r "s:^.*/|[.]ko\$::g" | sed 's/.ko.zst//' | xargs -n 1 modprobe
+}
+
+problem()
+{
+   printf "Encountered a problem!\n\nDropping you to a shell.\n\n"
+   sh
+}
+
+no_device()
+{
+   printf "The device %s, which is supposed to contain the\n" $1
+   printf "root file system, does not exist.\n"
+   printf "Please fix this problem and exit this shell.\n\n"
+}
+
+no_mount()
+{
+   printf "Could not mount device %s\n" $1
+   printf "Sleeping forever. Please reboot and fix the kernel command line.\n\n"
+   printf "Maybe the device is formatted with an unsupported file system?\n\n"
+   printf "Or maybe filesystem type autodetection went wrong, in which case\n"
+   printf "you should add the rootfstype=... parameter to the kernel command line.\n\n"
+   printf "Available partitions:\n"
+}
+
+do_mount_root()
+{
+   mkdir /.root
+
+   mkdir /ramfs/
+   mount -t tmpfs -o size=512m tmpfs /ramfs/
+
+   mkdir -p /ramfs/dvd
+   mkdir -p /ramfs/realroot
+   mkdir -p /ramfs/changes
+   mkdir -p /ramfs/workdir
+
+   [ -n "$rootflags" ] && rootflags="$rootflags,"
+   rootflags="$rootflags$ro"
+
+   mount -o loop /dev/sr0 /ramfs/dvd/
+   echo "/dev/sr0 mounted!"
+   mount -o loop,ro -t squashfs /ramfs/dvd/01-core.sb /ramfs/realroot
+   echo "squashfs mounted to /ramfs/realroot"
+   mount -t overlay overlay -o lowerdir=/ramfs/realroot,upperdir=/ramfs/changes,workdir=/ramfs/workdir /.root
+   echo "overlayfs root mounted to /.root"
+   echo "Handing off to systemd on overlayfs.."
+}
+
+do_try_resume()
+{
+   case "$resume" in
+      UUID=* ) eval $resume; resume="/dev/disk/by-uuid/$UUID"  ;;
+      LABEL=*) eval $resume; resume="/dev/disk/by-label/$LABEL" ;;
+   esac
+
+   if $noresume || ! [ -b "$resume" ]; then return; fi
+
+   ls -lH "$resume" | ( read x x x x maj min x
+       echo -n ${maj%,}:$min > /sys/power/resume )
+}
+
+a_modprobe
+
+init=/sbin/init
+root=
+rootdelay=
+rootfstype=auto
+ro="ro"
+rootflags=
+device=
+resume=
+noresume=false
+
+mount -n -t devtmpfs devtmpfs /dev
+mount -n -t proc     proc     /proc
+mount -n -t sysfs    sysfs    /sys
+mount -n -t tmpfs    tmpfs    /run
+
+read -r cmdline < /proc/cmdline
+
+for param in $cmdline ; do
+  case $param in
+    init=*      ) init=${param#init=}             ;;
+    root=*      ) root=${param#root=}             ;;
+    rootdelay=* ) rootdelay=${param#rootdelay=}   ;;
+    rootfstype=*) rootfstype=${param#rootfstype=} ;;
+    rootflags=* ) rootflags=${param#rootflags=}   ;;
+    resume=*    ) resume=${param#resume=}         ;;
+    noresume    ) noresume=true                   ;;
+    ro          ) ro="ro"                         ;;
+    rw          ) ro="rw"                         ;;
+  esac
+done
+
+# udevd location depends on version
+if [ -x /sbin/udevd ]; then
+  UDEVD=/sbin/udevd
+elif [ -x /lib/udev/udevd ]; then
+  UDEVD=/lib/udev/udevd
+elif [ -x /lib/systemd/systemd-udevd ]; then
+  UDEVD=/lib/systemd/systemd-udevd
+else
+  echo "Cannot find udevd nor systemd-udevd"
+  problem
+fi
+
+${UDEVD} --daemon --resolve-names=never
+udevadm trigger
+udevadm settle
+
+if [ -f /etc/mdadm.conf ] ; then mdadm -As                       ; fi
+if [ -x /sbin/vgchange  ] ; then /sbin/vgchange -a y > /dev/null ; fi
+if [ -n "$rootdelay"    ] ; then sleep "$rootdelay"              ; fi
+
+do_try_resume # This function will not return if resuming from disk
+do_mount_root
+
+killall -w ${UDEVD##*/}
+
+if [[ "$cmdline" == *"initrdshell"* ]]; then
+	echo "\n\nEntering initrd shell...\n\n"
+	echo "Once you exit the shell, the OS will continue to boot"
+	/usr/bin/sh
+fi
+exec switch_root /.root "$init" "$@"
