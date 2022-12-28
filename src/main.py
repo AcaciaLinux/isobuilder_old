@@ -9,6 +9,8 @@ KVERS="5.15.44"
 BIN_DIR="bin"
 
 def main():
+    blog.initialize()
+
     if(not os.getuid() == 0):
         blog.error("Root permissions required to chroot to build environment.")
         return -1

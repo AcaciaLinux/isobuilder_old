@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-import lddwrap
 import pathlib
 
 from log import blog
@@ -10,11 +9,11 @@ WORK_DIRECTORY = "initramfsbuild"
 
 BASE_FS = [ "dev", "run", "sys", "proc", "usr", "etc" ]
 USR_SUB = [ "bin", "lib", "sbin", "lib64" ]
-USR_LIB_SUB = [ "firmware", "modules" ]
+USR_LIB_SUB = [ "firmware", "modules", "systemd" ]
 ETC_SUB = [ "modprobe.d", "udev" ]
 
 # udevd -> /usr/lib/systemd-udevd
-BINFILES = ["sh", "cat", "cp", "dd", "killall", "ls", "mkdir", "mknod", "mount", "fgrep", "find", "egrep", "sed", "xargs", "grep", "umount", "sed", "sleep", "ln", "rm", "uname", "readlink", "basename", "udevadm", "kmod"]
+BINFILES = ["bash", "cat", "cp", "dd", "killall", "ls", "mkdir", "mknod", "mount", "fgrep", "find", "egrep", "sed", "xargs", "grep", "umount", "sed", "sleep", "ln", "rm", "uname", "readlink", "basename", "udevadm", "kmod"]
 SBINFILES = ["blkid", "switch_root"]
 
 def touch_file(file):
@@ -22,40 +21,62 @@ def touch_file(file):
         pass
 
 def copy_with_deps(buildroot, binfile, deps_list):
-    blog.info("Copying binary {} with dependencies..".format(binfile))
-    
+    blog.info("Copying binary {} with dependencies: {} ..".format(binfile, deps_list))
+
+
     binpath = os.path.relpath(binfile, start="buildroot")
-    shutil.copy(os.path.join("buildroot", binpath), os.path.join(WORK_DIRECTORY, binpath))
+
+
+    blog.info("Will copy {} -> {} ".format(binfile, os.path.join(WORK_DIRECTORY, binpath)))
+
+    shutil.copy(binfile, os.path.join(WORK_DIRECTORY, binpath))
 
     for dep in deps_list:
-        blog.info("Copying library {}..".format(dep))
-        shutil.copy(os.path.join(buildroot, dep[1:len(dep)]), os.path.join(WORK_DIRECTORY, dep[1:len(dep)]))
+        rel_path = os.path.relpath(dep, start="buildroot")
+
+        if(os.path.exists(os.path.join(WORK_DIRECTORY, rel_path))):
+            continue
+
+        blog.info("Will copy {} -> {} ".format(dep, os.path.join(WORK_DIRECTORY, rel_path)))
+        shutil.copy(dep, os.path.join(WORK_DIRECTORY, rel_path))
+
+
+# find a file
+def find_file(name, path):
+    for root, dirs, files in os.walk(path):
+        if name in files:
+            return os.path.join(root, name)
+    return None
 
 # uses ldd to get all dependencies of a given dynamic binary
-def get_dependencies(binfile):
-    return lddwrap.list_dependencies(path=pathlib.Path(binfile))
+def get_dependencies(buildroot, binfile):
+    blog.info("Calculating dependencies for {}".format(binfile))
 
-# uses ldd to get all dependencies of a given dynamic binary
-def get_dependencies_fd(binfile):
-    if(not os.path.exists(binfile)):
-        return [ ]
+    env = {'LD_LIBRARY_PATH': '/usr/lib:/usr/lib64'}
+    bin_path = "/" + os.path.relpath(binfile, start="buildroot")
+    proc = subprocess.run(['chroot', 'buildroot', 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
 
-    proc = subprocess.run(["ldd", binfile], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    deps = proc.stdout.split("\n")
+    deps = proc.stdout.decode().split("\n")
+    
+    for a in deps:
+        print(a)
 
     libs = [ ]
 
     for d in deps:
         # skip pseudo libraries and libsystemd
-        if("linux-vdso.so.1" in d or "linux-gate.so.1" in d or "libsystemd-shared" in d):
+        if("linux-vdso.so.1" in d or "linux-gate.so.1" in d):
             continue
         
         split = d.strip().split("=>") 
         if(len(split) == 2):
             dep_str = split[1].strip().split(" ")[0].strip()
-            libs.append(dep_str)
+            dependency = os.path.join("buildroot", dep_str[1:len(dep_str)])
+            libs.append(dependency)
     
-    return libs
+    blog.info("Dependencies for {} are: {}".format(binfile, libs))
+    return libs    
+ 
 
 def create_initramfs(buildroot, kname, kver, bindir):
     kmod_dir = os.path.join(buildroot, "usr/lib/modules/{}".format(kver))
@@ -99,11 +120,14 @@ def create_initramfs(buildroot, kname, kver, bindir):
 
     # symlinks
     blog.info("Creating symlinks..")
-    os.symlink("/usr/bin", os.path.join(WORK_DIRECTORY, "bin"))
-    os.symlink("/usr/lib", os.path.join(WORK_DIRECTORY, "lib"))
-    os.symlink("/usr/sbin", os.path.join(WORK_DIRECTORY, "sbin"))
-    os.symlink("/usr/lib64", os.path.join(WORK_DIRECTORY, "lib64"))
-    
+    os.symlink("usr/bin", os.path.join(WORK_DIRECTORY, "bin"))
+    os.symlink("usr/lib", os.path.join(WORK_DIRECTORY, "lib"))
+    os.symlink("usr/sbin", os.path.join(WORK_DIRECTORY, "sbin"))
+    os.symlink("usr/lib64", os.path.join(WORK_DIRECTORY, "lib64"))
+
+    #symlink bash -> sh
+    os.symlink("/usr/bin/bash", os.path.join(WORK_DIRECTORY, "usr/bin/sh"))
+
     # mk null and console
     blog.info("Creating device nodes..")
     os.system("mknod -m 640 {} c 5 1".format(os.path.join(WORK_DIRECTORY, "dev/console")))
@@ -134,30 +158,40 @@ def create_initramfs(buildroot, kname, kver, bindir):
     blog.info("Copying /usr/bin binaries..")
     for b in BINFILES:
         b_path = os.path.join(buildroot, os.path.join("usr/bin", b))
-        copy_with_deps(buildroot, b_path, get_dependencies(b_path))
+        copy_with_deps(buildroot, b_path, get_dependencies(buildroot, b_path))
 
     blog.info("Copying /usr/sbin binaries..")
     for b in SBINFILES:
         b_path = os.path.join(buildroot, os.path.join("usr/sbin", b))
-        copy_with_deps(buildroot, b_path, get_dependencies(b_path))
+        copy_with_deps(buildroot, b_path, get_dependencies(buildroot, b_path))
 
     blog.info("Copying systemd-udevd..")
     sd_udevd = "usr/lib/systemd/systemd-udevd"
 
     sd_udevd_path = os.path.join(buildroot, sd_udevd)
-    sd_udevd_deps = get_dependencies(sd_udevd_path)
+    sd_udevd_deps = get_dependencies(buildroot, sd_udevd_path)
     
+    shutil.copy(os.path.join(buildroot, sd_udevd), os.path.join(WORK_DIRECTORY, sd_udevd))
+
     for dep in sd_udevd_deps:
-        blog.info("Copying library {}..".format(dep))
-        shutil.copy(os.path.join(buildroot, dep[1:len(dep)]), os.path.join(WORK_DIRECTORY, dep[1:len(dep)]))
+        src = dep
+
+        rel_path = os.path.relpath(src, start="buildroot")
+        dst = os.path.join(WORK_DIRECTORY, rel_path)
+
+        if(os.path.exists(dst)):
+            continue
+
+        blog.info("Copying library {} -> {}..".format(src, dst))
+        shutil.copy(src, dst)
 
     blog.info("Symlinking /usr/bin/kmod..")
     os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "lsmod"))
     os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "insmod"))
-    
-    blog.info("Copying udev, systemd and elogin config files")
+   
+    blog.info("Copying udev and systemd configs")
     shutil.copytree(os.path.join(buildroot, "usr/lib/udev"), os.path.join(WORK_DIRECTORY, "usr/lib/udev"))
-    shutil.copytree(os.path.join(buildroot, "usr/lib/systemd"), os.path.join(WORK_DIRECTORY, "usr/lib/systemd"))
+    #shutil.copytree(os.path.join(buildroot, "usr/lib/systemd"), os.path.join(WORK_DIRECTORY, "usr/lib/systemd"))
     
     blog.info("Copying kernel modules...")
     shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/{}".format(kver)), symlinks=False, ignore_dangling_symlinks=True)
