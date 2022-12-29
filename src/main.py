@@ -16,7 +16,7 @@ def main():
         blog.error("Root permissions required to chroot to build environment.")
         return -1
     
-    packages = ["base", "linux-lts", "coreutils", "procps-ng", "squashfs-tools", "leaf", "cpio","psmisc", "glibc", "gcc", "make", "bash", "sed", "grep", "gawk", "coreutils", "binutils", "findutils", "automake", "autoconf", "file", "gzip", "libtool", "m4", "groff", "patch", "texinfo", "which", "systemd", "python3"]
+    packages = ["base", "linux-lts", "coreutils", "procps-ng", "squashfs-tools", "leaf", "cpio","psmisc", "glibc", "gcc", "make", "bash", "sed", "grep", "gawk", "coreutils", "binutils", "findutils", "automake", "autoconf", "file", "gzip", "libtool", "m4", "groff", "patch", "texinfo", "which", "systemd", "python3", "networkmanager"]
 
     if(envmanager.setup(packages) != 0):
         return -1

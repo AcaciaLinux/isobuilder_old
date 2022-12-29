@@ -8,7 +8,7 @@ echo "deb-src http://deb.debian.org/debian buster main" >> /etc/apt/sources.list
 apt-get update -y
 
 CWD=$(pwd)
-DIR="/boot/acacia"
+DIR="/boot/"
 
 # download, unpack, and patch syslinux
 

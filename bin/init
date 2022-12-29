@@ -3,31 +3,28 @@
 PATH=/usr/bin:/usr/sbin
 export PATH
 
-do_mount_squash_root()
+mount_squash_root()
 {
    mkdir /.root
-
    mkdir /ramfs/
+   
    mount -t tmpfs -o size=512m tmpfs /ramfs/
 
    mkdir -p /ramfs/dvd
    mkdir -p /ramfs/realroot
    mkdir -p /ramfs/changes
    mkdir -p /ramfs/workdir
-
-   [ -n "$rootflags" ] && rootflags="$rootflags,"
-   rootflags="$rootflags$ro"
-
+	
+   log "Mounting dvd.."
    mount -o loop /dev/sr0 /ramfs/dvd/
-   echo "/dev/sr0 mounted!"
+   log "Mounting squashfs.."
    mount -o loop,ro -t squashfs /ramfs/dvd/01-core.sb /ramfs/realroot
-   echo "squashfs mounted to /ramfs/realroot"
+   log "Mounting overlayfs.."
    mount -t overlay overlay -o lowerdir=/ramfs/realroot,upperdir=/ramfs/changes,workdir=/ramfs/workdir /.root
-   echo "overlayfs root mounted to /.root"
-   echo "Handing off to systemd on overlayfs.."
+   log "OverlayFS root mounted to /.root"
 }
 
-do_try_resume()
+try_resume()
 {
    case "$resume" in
       UUID=* ) eval $resume; resume="/dev/disk/by-uuid/$UUID"  ;;
@@ -97,14 +94,13 @@ udevadm settle
 log "uevents settled."
 
 log "Attempting to mount root.."
-
-
+mount_squash_root
 
 #do_try_resume # This function will not return if resuming from disk
 #do_mount_root
 
 
-log "Switching root and executing systemd.."
+log "Preparing to handoff to systemd.."
 killall -w systemd-udevd
 
 if [[ "$cmdline" == *"initrdshell"* ]]; then
@@ -112,4 +108,6 @@ if [[ "$cmdline" == *"initrdshell"* ]]; then
 	log "Good luck."
 	/usr/bin/sh
 fi
+
+log "Switching root and executing systemd!"
 exec switch_root /.root "$init" "$@"

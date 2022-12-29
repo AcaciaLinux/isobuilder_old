@@ -3,7 +3,8 @@ import os
 from pyleaf import pyleafcore
 from log import blog
 
-BUILD_ROOT_DIR = "buildroot"
+BUILD_ROOT_DIR = "./buildroot"
+ROOT_PW = "acacia"
 
 def setup(packages):
     leafcore_instance = None
@@ -41,4 +42,14 @@ def setup(packages):
         blog.error("Failed to upgrade packages.")
         return -1
 
+    # fixing up shadow
+    blog.info("Running pwconv..")
+    os.system("chroot {} /usr/sbin/pwconv".format(BUILD_ROOT_DIR))
+
+    blog.info("Running pwconv..")
+    os.system("chroot {} /usr/sbin/grpconv".format(BUILD_ROOT_DIR))
+
+    blog.info("Setting root passwd..")
+    cmd = "/usr/bin/echo \"root:{}\" | /usr/sbin/chpasswd".format(ROOT_PW)
+    os.system("chroot {} /usr/bin/sh -c \"{}\"".format(BUILD_ROOT_DIR, cmd))
     return 0
