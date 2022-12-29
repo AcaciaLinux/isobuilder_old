@@ -3,6 +3,7 @@ import os
 from log import blog
 from envmanager import envmanager
 from initramfs import initramfs
+from squash import squash
 
 KNAME="vmlinuz-acacia-lts"
 KVERS="5.15.44"
@@ -25,6 +26,9 @@ def main():
         return -1
     
     if(initramfs.create_initramfs(envmanager.BUILD_ROOT_DIR, KNAME, KVERS, BIN_DIR) != 0):
+        return -1
+    
+    if(squash.build_iso() != 0):
         return -1
 
 if(__name__ == "__main__"):
