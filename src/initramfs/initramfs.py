@@ -5,6 +5,8 @@ import pathlib
 
 from log import blog
 
+TARGET_FILE = "acacia-initrd.img"
+
 WORK_DIRECTORY = "initramfsbuild"
 
 BASE_FS = [ "dev", "run", "sys", "proc", "usr", "etc" ]
@@ -211,8 +213,7 @@ def create_initramfs(buildroot, kname, kver, bindir):
     shutil.copytree(kmod_dir, os.path.join(WORK_DIRECTORY, "usr/lib/modules/{}".format(kver)), symlinks=False, ignore_dangling_symlinks=True)
 
     blog.info("Compressing initrd..")
-    initrd_file = "acacia-initrd.img"
-    os.system("(cd {}; find . | cpio -o -H newc --quiet | gzip -9) > {}".format(WORK_DIRECTORY, initrd_file))
+    os.system("(cd {}; find . | cpio -o -H newc --quiet | gzip -9) > {}".format(WORK_DIRECTORY, TARGET_FILE))
 
     blog.info("Created initramfs.")
 
