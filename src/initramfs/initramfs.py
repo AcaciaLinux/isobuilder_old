@@ -16,6 +16,9 @@ ETC_SUB = [ "modprobe.d", "udev" ]
 BINFILES = ["bash", "cat", "cp", "dd", "killall", "ls", "mkdir", "mknod", "mount", "fgrep", "find", "egrep", "sed", "xargs", "grep", "umount", "sed", "sleep", "ln", "rm", "uname", "readlink", "basename", "udevadm", "kmod"]
 SBINFILES = ["blkid", "switch_root"]
 
+# required kernel modules
+KERNEL_MODULES = [ "virtio_net", "sr_mod", "usbhid", "loop", "cdrom", "net_failover", "ata_generic", "failover", "virtio_scsi", "pata_acpi", "virtio_balloon", "serio_raw", "atkbd", "libps2", "i8042", "virtio_pci", "floppy", "virtio_pci_modern_dev", "ata_piix", "serio", "hid-generic", "usbhid", "atkbd" ]
+
 def touch_file(file):
     with open(file, "w", encoding="utf-8") as f:
         pass
@@ -23,9 +26,7 @@ def touch_file(file):
 def copy_with_deps(buildroot, binfile, deps_list):
     blog.info("Copying binary {} with dependencies: {} ..".format(binfile, deps_list))
 
-
     binpath = os.path.relpath(binfile, start="buildroot")
-
 
     blog.info("Will copy {} -> {} ".format(binfile, os.path.join(WORK_DIRECTORY, binpath)))
 
@@ -57,9 +58,6 @@ def get_dependencies(buildroot, binfile):
     proc = subprocess.run(['chroot', 'buildroot', 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
 
     deps = proc.stdout.decode().split("\n")
-    
-    for a in deps:
-        print(a)
 
     libs = [ ]
 
@@ -155,6 +153,21 @@ def create_initramfs(buildroot, kname, kver, bindir):
     blog.info("Copying init binary..")
     shutil.copy(os.path.join(bindir, "init"), os.path.join(WORK_DIRECTORY, "init"))
     
+    blog.info("Writing /loadmodules..")
+
+    with open(os.path.join(WORK_DIRECTORY, "loadmodules"), "w+") as lm:
+        f_entry = True
+        lm.write("KMODULES=(")
+
+        for mod in KERNEL_MODULES:
+            if(f_entry):
+                f_entry = False
+                lm.write(mod)
+            else:
+                lm.write(" " + mod)
+
+        lm.write(")\n")
+
     blog.info("Copying /usr/bin binaries..")
     for b in BINFILES:
         b_path = os.path.join(buildroot, os.path.join("usr/bin", b))
@@ -185,9 +198,10 @@ def create_initramfs(buildroot, kname, kver, bindir):
         blog.info("Copying library {} -> {}..".format(src, dst))
         shutil.copy(src, dst)
 
-    blog.info("Symlinking /usr/bin/kmod..")
-    os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "lsmod"))
-    os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "insmod"))
+    blog.info("Symlinking /usr/bin/kmod. lsmod, insmod, modprobe")
+    os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "usr/bin/lsmod"))
+    os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "usr/bin/insmod"))
+    os.symlink("/usr/bin/kmod", os.path.join(WORK_DIRECTORY, "usr/bin/modprobe"))
    
     blog.info("Copying udev and systemd configs")
     shutil.copytree(os.path.join(buildroot, "usr/lib/udev"), os.path.join(WORK_DIRECTORY, "usr/lib/udev"))

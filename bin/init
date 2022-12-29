@@ -3,30 +3,7 @@
 PATH=/usr/bin:/usr/sbin
 export PATH
 
-problem()
-{
-   printf "Encountered a problem!\n\nDropping you to a shell.\n\n"
-   sh
-}
-
-no_device()
-{
-   printf "The device %s, which is supposed to contain the\n" $1
-   printf "root file system, does not exist.\n"
-   printf "Please fix this problem and exit this shell.\n\n"
-}
-
-no_mount()
-{
-   printf "Could not mount device %s\n" $1
-   printf "Sleeping forever. Please reboot and fix the kernel command line.\n\n"
-   printf "Maybe the device is formatted with an unsupported file system?\n\n"
-   printf "Or maybe filesystem type autodetection went wrong, in which case\n"
-   printf "you should add the rootfstype=... parameter to the kernel command line.\n\n"
-   printf "Available partitions:\n"
-}
-
-do_mount_root()
+do_mount_squash_root()
 {
    mkdir /.root
 
@@ -63,6 +40,13 @@ do_try_resume()
        echo -n ${maj%,}:$min > /sys/power/resume )
 }
 
+# logs to stdout
+log() {
+    log_prefix="[acacia-initramfs]"
+    echo "$log_prefix $1"
+}
+
+log "Loading.."
 init=/sbin/init
 root=
 rootdelay=
@@ -73,11 +57,13 @@ device=
 resume=
 noresume=false
 
+log "Mounting kernel filesystems.."
 mount -n -t devtmpfs devtmpfs /dev
 mount -n -t proc     proc     /proc
 mount -n -t sysfs    sysfs    /sys
 mount -n -t tmpfs    tmpfs    /run
 
+log "Parsing kernel parameters.."
 read -r cmdline < /proc/cmdline
 
 for param in $cmdline ; do
@@ -94,18 +80,36 @@ for param in $cmdline ; do
   esac
 done
 
+log "Loading device drivers.."
+source /loadmodules
+
+for kmod in "${KMODULES[@]}"; do
+	modprobe "$kmod"
+done
+
+
+log "Launching systemd-udevd.."
 /usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
-udevadm trigger --verbose
+log "Triggering uevents.."
+udevadm trigger
+log "Waiting for uevents to settle.."
 udevadm settle
+log "uevents settled."
 
-do_try_resume # This function will not return if resuming from disk
-do_mount_root
+log "Attempting to mount root.."
 
-killall -w ${UDEVD##*/}
+
+
+#do_try_resume # This function will not return if resuming from disk
+#do_mount_root
+
+
+log "Switching root and executing systemd.."
+killall -w systemd-udevd
 
 if [[ "$cmdline" == *"initrdshell"* ]]; then
-	echo "\n\nEntering initrd shell...\n\n"
-	echo "Once you exit the shell, the OS will continue to boot"
+	log "Shell requested by kernel parameter. Dropping you to a shell."
+	log "Good luck."
 	/usr/bin/sh
 fi
 exec switch_root /.root "$init" "$@"
