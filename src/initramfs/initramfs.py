@@ -19,7 +19,7 @@ BINFILES = ["bash", "cat", "cp", "dd", "killall", "ls", "mkdir", "mknod", "mount
 SBINFILES = ["blkid", "switch_root"]
 
 # required kernel modules
-KERNEL_MODULES = [ "virtio_net", "sr_mod", "usbhid", "loop", "cdrom", "net_failover", "ata_generic", "failover", "virtio_scsi", "pata_acpi", "virtio_balloon", "serio_raw", "atkbd", "libps2", "i8042", "virtio_pci", "floppy", "virtio_pci_modern_dev", "ata_piix", "serio", "hid-generic", "usbhid", "atkbd", "squashfs", "iso9660", "overlay" ]
+KERNEL_MODULES = [ "ext4", "virtio_net", "sr_mod", "usbhid", "loop", "cdrom", "net_failover", "ata_generic", "failover", "virtio_scsi", "pata_acpi", "virtio_balloon", "serio_raw", "atkbd", "libps2", "i8042", "virtio_pci", "floppy", "virtio_pci_modern_dev", "ata_piix", "serio", "hid-generic", "usbhid", "atkbd", "squashfs", "iso9660", "overlay" ]
 
 def touch_file(file):
     with open(file, "w", encoding="utf-8") as f:

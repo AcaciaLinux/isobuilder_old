@@ -3,8 +3,71 @@
 PATH=/usr/bin:/usr/sbin
 export PATH
 
+#
+# find device by uuid
+# 
+find_device_by_uuid() {
+  local uuid=$1
+
+  # Use blkid to find the device associated with the given UUID
+  local device=$(blkid -U "$uuid")
+
+  # Return the device if it was found
+  if [ -n "$device" ]; then
+    echo "$device"
+    return 0
+  else
+    >&2 log "Error: No device found with UUID $uuid"
+    shell_on_error
+    return 1
+  fi
+}
+
+#
+# mount rootfs
+#
+mount_root()
+{
+  local identifier=$1
+
+  # Check if the identifier is a UUID, a device name, or the SQUASH option
+  if [[ "$identifier" =~ ^UUID= ]]; then
+    local uuid=${identifier#UUID=}
+    local device=$(find_device_by_uuid "$uuid")
+    mount "$device" /.root
+
+  elif [[ "$identifier" =~ ^DEV= ]]; then
+    local device=${identifier#DEV=}
+    mount "$device" /.root
+
+  elif [[ "$identifier" == "SQUASH" ]]; then
+    mount_squash_root
+    return 0
+  else
+    >&2 log "Error: Invalid identifier format. Must be either UUID=, DEV=, or SQUASH"
+    shell_on_error
+    return 1
+  fi
+
+}
+
+#
+# Spawns a shell on Error
+#
+shell_on_error()
+{	
+	log "Something went wrong. Dropping you to a shell."
+	log "The system will attempt to continue booting after you exit this shell."
+	log "Good luck."
+	/usr/bin/sh
+}
+
+#
+# Attempts to mount a squashfs root filesystem at /ramfs/dvd/01-core.sb
+# 
 mount_squash_root()
 {
+   log "Setting up squashroot.."
    mkdir /.root
    mkdir /ramfs/
    
@@ -24,20 +87,9 @@ mount_squash_root()
    log "OverlayFS root mounted to /.root"
 }
 
-try_resume()
-{
-   case "$resume" in
-      UUID=* ) eval $resume; resume="/dev/disk/by-uuid/$UUID"  ;;
-      LABEL=*) eval $resume; resume="/dev/disk/by-label/$LABEL" ;;
-   esac
-
-   if $noresume || ! [ -b "$resume" ]; then return; fi
-
-   ls -lH "$resume" | ( read x x x x maj min x
-       echo -n ${maj%,}:$min > /sys/power/resume )
-}
-
+#
 # logs to stdout
+#
 log() {
     log_prefix="[acacia-initramfs]"
     echo "$log_prefix $1"
@@ -77,6 +129,8 @@ for param in $cmdline ; do
   esac
 done
 
+log "Attempting to mount root on $root .."
+
 log "Loading device drivers.."
 source /loadmodules
 
@@ -94,7 +148,7 @@ udevadm settle
 log "uevents settled."
 
 log "Attempting to mount root.."
-mount_squash_root
+mount_root $root
 
 #do_try_resume # This function will not return if resuming from disk
 #do_mount_root
