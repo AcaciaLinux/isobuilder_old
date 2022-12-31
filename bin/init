@@ -3,6 +3,8 @@
 PATH=/usr/bin:/usr/sbin
 export PATH
 
+mkdir /.root
+
 #
 # find device by uuid
 # 
@@ -68,7 +70,6 @@ shell_on_error()
 mount_squash_root()
 {
    log "Setting up squashroot.."
-   mkdir /.root
    mkdir /ramfs/
    
    mount -t tmpfs -o size=512m tmpfs /ramfs/
