@@ -57,7 +57,7 @@ def get_dependencies(buildroot, binfile):
 
     env = {'LD_LIBRARY_PATH': '/usr/lib:/usr/lib64'}
     bin_path = "/" + os.path.relpath(binfile, start=buildroot)
-    proc = subprocess.run(['chroot', buildroot, 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
+    proc = subprocess.run(['/sbin/chroot', buildroot, 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
 
     deps = proc.stdout.decode().split("\n")
 
