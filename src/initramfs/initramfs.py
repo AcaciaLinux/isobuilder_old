@@ -28,14 +28,14 @@ def touch_file(file):
 def copy_with_deps(buildroot, binfile, deps_list):
     blog.info("Copying binary {} with dependencies: {} ..".format(binfile, deps_list))
 
-    binpath = os.path.relpath(binfile, start="buildroot")
+    binpath = os.path.relpath(binfile, start=buildroot)
 
     blog.info("Will copy {} -> {} ".format(binfile, os.path.join(WORK_DIRECTORY, binpath)))
 
     shutil.copy(binfile, os.path.join(WORK_DIRECTORY, binpath))
 
     for dep in deps_list:
-        rel_path = os.path.relpath(dep, start="buildroot")
+        rel_path = os.path.relpath(dep, start=buildroot)
 
         if(os.path.exists(os.path.join(WORK_DIRECTORY, rel_path))):
             continue
@@ -56,8 +56,8 @@ def get_dependencies(buildroot, binfile):
     blog.info("Calculating dependencies for {}".format(binfile))
 
     env = {'LD_LIBRARY_PATH': '/usr/lib:/usr/lib64'}
-    bin_path = "/" + os.path.relpath(binfile, start="buildroot")
-    proc = subprocess.run(['chroot', 'buildroot', 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
+    bin_path = "/" + os.path.relpath(binfile, start=buildroot)
+    proc = subprocess.run(['chroot', buildroot, 'ldd', bin_path], stdout=subprocess.PIPE, env=env)
 
     deps = proc.stdout.decode().split("\n")
 
@@ -71,7 +71,7 @@ def get_dependencies(buildroot, binfile):
         split = d.strip().split("=>") 
         if(len(split) == 2):
             dep_str = split[1].strip().split(" ")[0].strip()
-            dependency = os.path.join("buildroot", dep_str[1:len(dep_str)])
+            dependency = os.path.join(buildroot, dep_str[1:len(dep_str)])
             libs.append(dependency)
     
     blog.info("Dependencies for {} are: {}".format(binfile, libs))
