@@ -22,7 +22,7 @@ def setup(packages):
         os.mkdir(BUILD_ROOT_DIR)
     
     # set root dir
-    leafcore_instance.setStringConfig(LeafConfig_string.CONFIG_ROOTDIR, temp_dir)
+    leafcore_instance.setStringConfig(LeafConfig_string.CONFIG_ROOTDIR, BUILD_ROOT_DIR)
     
     # leafcore options
     leafcore_instance.setBoolConfig(LeafConfig_bool.CONFIG_NOASK, True)
