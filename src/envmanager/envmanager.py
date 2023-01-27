@@ -1,6 +1,7 @@
 import os
 
-from pyleaf import pyleafcore
+import pyleafcore
+from pyleafcore import *
 from log import blog
 
 BUILD_ROOT_DIR = "./buildroot"
@@ -9,7 +10,7 @@ ROOT_PW = "acacia"
 def setup(packages):
     leafcore_instance = None
     try:
-        leafcore_instance = pyleafcore.Leafcore()
+        leafcore_instance = Leafcore()
     except Exception:
         blog.error("Could not setup leafcore.")
         return -1
@@ -21,13 +22,13 @@ def setup(packages):
         os.mkdir(BUILD_ROOT_DIR)
     
     # set root dir
-    leafcore_instance.setRootDir(BUILD_ROOT_DIR)
+    leafcore_instance.setStringConfig(LeafConfig_string.CONFIG_ROOTDIR, temp_dir)
     
     # leafcore options
-    leafcore_instance.setBoolConfig(pyleafcore.LeafConfig_bool.CONFIG_NOASK, True)
-    leafcore_instance.setBoolConfig(pyleafcore.LeafConfig_bool.CONFIG_FORCEOVERWRITE, True)
-    leafcore_instance.setBoolConfig(pyleafcore.LeafConfig_bool.CONFIG_RUNPOSTINSTALL, False)
-    leafcore_instance.setBoolConfig(pyleafcore.LeafConfig_bool.CONFIG_NOPROGRESS, True)
+    leafcore_instance.setBoolConfig(LeafConfig_bool.CONFIG_NOASK, True)
+    leafcore_instance.setBoolConfig(LeafConfig_bool.CONFIG_FORCEOVERWRITE, True)
+    leafcore_instance.setBoolConfig(LeafConfig_bool.CONFIG_RUNPOSTINSTALL, False)
+    leafcore_instance.setBoolConfig(LeafConfig_bool.CONFIG_NOPROGRESS, True)
 
     # update pkglist
     leafcore_instance.a_update()
