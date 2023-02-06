@@ -35,12 +35,12 @@ def setup(packages):
 
     # setup buildroot
     if(leafcore_instance.a_install(packages) != 0):
-        blog.error("Failed to deploy packages.")
+        blog.error("Failed to deploy packages: {}".format(leafcore_instance.getLastErrorString()))
         return -1
 
     # run upgrade..
     if(leafcore_instance.a_upgrade([]) != 0):
-        blog.error("Failed to upgrade packages.")
+        blog.error("Failed to upgrade packages: {}".format(leafcore_instance.getLastErrorString()))
         return -1
 
     # fixing up shadow
